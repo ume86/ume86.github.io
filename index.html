@@ -2026,7 +2026,16 @@ function loadPeer(){
   if(window.Peer)return Promise.resolve();
   return new Promise((res,rej)=>{const sc=document.createElement('script');sc.src=PEER_SRC;sc.onload=()=>window.Peer?res():rej(new Error('peer'));sc.onerror=()=>rej(new Error('peer'));document.head.appendChild(sc);});
 }
-function peerOpts(){return Object.assign({debug:0},window.LI_PEER_OPTS||{});}
+// 通信の中継サーバー（Metered）。直接つながらない回線同士でも、ここを経由してつながる
+const ICE_SERVERS=[
+  {urls:'stun:stun.l.google.com:19302'},
+  {urls:'stun:stun.relay.metered.ca:80'},
+  {urls:'turn:global.relay.metered.ca:80',username:'4c0d7475fab0f6a1a54a4296',credential:'6JrufTmIp6/Wj0mZ'},
+  {urls:'turn:global.relay.metered.ca:80?transport=tcp',username:'4c0d7475fab0f6a1a54a4296',credential:'6JrufTmIp6/Wj0mZ'},
+  {urls:'turn:global.relay.metered.ca:443',username:'4c0d7475fab0f6a1a54a4296',credential:'6JrufTmIp6/Wj0mZ'},
+  {urls:'turns:global.relay.metered.ca:443?transport=tcp',username:'4c0d7475fab0f6a1a54a4296',credential:'6JrufTmIp6/Wj0mZ'},
+];
+function peerOpts(){return Object.assign({debug:0,config:{iceServers:ICE_SERVERS}},window.LI_PEER_OPTS||{});}
 function newCode(){let c='';for(let i=0;i<5;i++)c+=CODE_CH[Math.floor(Math.random()*CODE_CH.length)];return c;}
 function lbMsg(t,err){const m=$('lbMsg');m.textContent=t||'';m.classList.toggle('err',!!err);}
 function peerErrText(e){
@@ -2063,7 +2072,7 @@ async function netJoin(){
   peer.on('open',()=>{
     const conn=peer.connect(ROOM_PREFIX+code,{reliable:true,serialization:'json'});
     NET.peer=peer;NET.conn=conn;NET.code=code;
-    NET.connT=setTimeout(()=>{if(!conn.open)fail('部屋に接続できませんでした。もう一度試すか、同じWi-Fiでない場合は時間をおいて試してください');},15000);
+    NET.connT=setTimeout(()=>{if(!conn.open)fail('部屋に接続できませんでした。部屋を作った人がゲームの画面を開いたままか確かめて、もう一度試してください');},25000);
     conn.on('open',()=>{clearTimeout(NET.connT);NET.on=true;NET.role='client';NET.lastHostT=performance.now();NET.ready=false;conn.send({t:'hi',n:NET.name});lbBusy(false);lbMsg('');showRoom();});
     conn.on('data',d=>clientRecv(d));
     conn.on('close',()=>clientLost());
@@ -2279,7 +2288,7 @@ function clientLost(bye){
 function netTick(dt){
   NET.sendT-=dt;
   if(netH()){
-    if(NET.sendT<=0){NET.sendT=.05;
+    if(NET.sendT<=0){NET.sendT=1/15;
       const msg={t:'u',e:NET.q.map(serEv),s:hostSnap()};NET.q=[];
       for(const p of NET.conns.values()){try{if(p.conn.open)p.conn.send(msg);}catch(_){}}
     }
